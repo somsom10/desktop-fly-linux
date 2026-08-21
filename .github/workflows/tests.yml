@@ -11,7 +11,7 @@ jobs:
   headless:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Install system dependencies
         run: |
           sudo apt-get update
@@ -20,6 +20,7 @@ jobs:
             python3-cairo \
             python3-xlib \
             python3-gi \
+            gir1.2-gtk-3.0 \
             python3-pil \
             python3-pip \
             python3-setuptools \
