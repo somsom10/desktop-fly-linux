@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+scratch/
+*.png
+!upstream/assets/*.png
+!docs/img/*.png
