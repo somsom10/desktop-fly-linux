@@ -4,6 +4,14 @@ A 3D fruit fly that lives on your Linux desktop — walking, grooming, sleeping 
 fleeing your cursor because a **live spiking simulation of the real FlyWire
 connectome** says so, not because an animation was triggered.
 
+![The fly crossing an editor to reach a drop of sugar](docs/img/fly-sugar.gif)
+
+*Ctrl+right-click leaves sugar; the odour steers the real DNa01/DNa02 and DNp09
+neurons and the fly walks over to feed. It is standing on the very neuron
+coordinates that drive it — `data/brain_points.json`.*
+
+![The fly and a drop of sugar on a text editor](docs/img/fly.png)
+
 This is a Linux port of [DenisSergeevitch/desktop-fly](https://github.com/DenisSergeevitch/desktop-fly),
 which is macOS-only (Cocoa + SceneKit). The original is kept verbatim in
 [`upstream/`](upstream/) as the reference; see [docs/PORT_PLAN.md](docs/PORT_PLAN.md)
