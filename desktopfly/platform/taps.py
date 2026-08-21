@@ -1,4 +1,4 @@
-"""Global clicks: taps on the fly's substrate.
+"""Global clicks: taps on the fly's substrate, and right-click to leave sugar.
 
 Upstream uses ``NSEvent.addGlobalMonitorForEvents``, which is permission-free on
 macOS and reports every click anywhere on screen.  Wayland has no equivalent —
@@ -52,6 +52,16 @@ class ClickEvent:
     button: int  # 1 = left, 2 = middle, 3 = right
     x: int
     y: int
+    ctrl: bool = False
+    shift: bool = False
+    alt: bool = False
+    super_: bool = False
+
+    def has_modifier(self, name: str) -> bool:
+        return {
+            "ctrl": self.ctrl, "shift": self.shift, "alt": self.alt,
+            "super": self.super_, "none": True,
+        }.get(name, False)
 
 try:
     from Xlib.ext import xinput as _xinput
@@ -84,9 +94,9 @@ class TapSense:
     def poll(self) -> list[ClickEvent]:
         """Button presses observed since the previous call.
 
-        Raw XI2 events carry no pointer position, so it is read back from the
-        server as each event is drained. That is a frame behind at worst, which
-        is irrelevant for a fly.
+        Raw XI2 events carry no pointer position or modifier state, so both are
+        read back from the server as each event is drained. That is a frame
+        behind at worst, which is irrelevant for a fly.
         """
         if not self.available or self._d is None:
             return []
@@ -100,7 +110,109 @@ class TapSense:
                 if button == 0:
                     continue
                 p = self._d.screen().root.query_pointer()
-                clicks.append(ClickEvent(button=button, x=p.root_x, y=p.root_y))
+                clicks.append(ClickEvent(
+                    button=button, x=p.root_x, y=p.root_y,
+                    ctrl=bool(p.mask & _CONTROL), shift=bool(p.mask & _SHIFT),
+                    alt=bool(p.mask & _ALT), super_=bool(p.mask & _SUPER),
+                ))
         except Exception:
             return clicks
         return clicks
+
+
+_MOD_MASKS = {
+    "ctrl": _X.ControlMask,
+    "shift": _X.ShiftMask,
+    "alt": _X.Mod1Mask,
+    "super": _X.Mod4Mask,
+}
+# CapsLock and NumLock are just more modifier bits, and a grab registered
+# without them silently stops matching the moment either is on.
+_LOCK_COMBOS = (0, _X.LockMask, _X.Mod2Mask, _X.LockMask | _X.Mod2Mask)
+
+
+class ButtonGrab:
+    """A passive grab on <modifier>+button, e.g. Ctrl+right-click.
+
+    Preferred over watching raw XI2 events for this job, for two reasons:
+
+    * **Modifiers are correct.** Raw events carry no modifier state, so the only
+      way to pair one with a modifier is to query the keyboard afterwards — a
+      race that loses whenever the key is released quickly. A grab matches the
+      modifier at press time, in the server.
+    * **The click is consumed.** Without a grab the right-click would also reach
+      whatever is underneath and open its context menu.
+
+    Plain clicks are untouched: only this one combination is grabbed.
+    """
+
+    def __init__(self, button: int = 3, modifier: str = "ctrl"):
+        self.available = False
+        self.error = None
+        self.button = button
+        self._d = None
+        mask = _MOD_MASKS.get(modifier)
+        if mask is None:
+            # "none" would mean grabbing every right-click, which would break
+            # right-click everywhere; leave it to the raw-event path instead.
+            return
+        try:
+            self._d = _xdisplay.Display()
+            self._root = self._d.screen().root
+            # X reports protocol errors asynchronously, so a failed grab never
+            # raises here — it just prints later. Capture them explicitly, or a
+            # combination already grabbed by another client (or a second copy of
+            # this app) would look like success and silently do nothing.
+            errors = []
+            self._d.set_error_handler(lambda err, req: errors.append(err))
+            for extra in _LOCK_COMBOS:
+                self._root.grab_button(
+                    button, mask | extra, True, _X.ButtonPressMask,
+                    _X.GrabModeAsync, _X.GrabModeAsync, _X.NONE, _X.NONE)
+            self._d.sync()
+            self._d.set_error_handler(None)
+            if errors:
+                self.error = (
+                    f"{modifier}+button-{button} is already grabbed by another "
+                    "client (another copy of desktopfly?); sugar placement by "
+                    "click is unavailable — use the tray menu"
+                )
+                self._d = None
+            else:
+                self.available = True
+        except Exception as exc:
+            self.error = str(exc)
+            self._d = None
+            self.available = False
+
+    def poll(self) -> list[ClickEvent]:
+        """Grabbed presses since the previous call, with real screen coords."""
+        if not self.available or self._d is None:
+            return []
+        out: list[ClickEvent] = []
+        try:
+            for _ in range(self._d.pending_events()):
+                event = self._d.next_event()
+                if event.type != _X.ButtonPress:
+                    continue
+                out.append(ClickEvent(
+                    button=int(event.detail), x=int(event.root_x), y=int(event.root_y),
+                    ctrl=bool(event.state & _X.ControlMask),
+                    shift=bool(event.state & _X.ShiftMask),
+                    alt=bool(event.state & _X.Mod1Mask),
+                    super_=bool(event.state & _X.Mod4Mask),
+                ))
+        except Exception:
+            return out
+        return out
+
+    def close(self) -> None:
+        if self._d is None:
+            return
+        try:
+            mask = _MOD_MASKS.get("ctrl", 0)
+            for extra in _LOCK_COMBOS:
+                self._root.ungrab_button(self.button, mask | extra)
+            self._d.sync()
+        except Exception:
+            pass

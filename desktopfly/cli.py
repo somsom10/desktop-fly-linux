@@ -85,6 +85,9 @@ def main(argv: list[str] | None = None) -> int:
                         help="index of the monitor to live on (see --list-monitors)")
     parser.add_argument("--list-monitors", action="store_true")
     parser.add_argument("--no-brain", action="store_true", help="start with the brain window hidden")
+    parser.add_argument("--sugar-modifier", default="ctrl",
+                        choices=["ctrl", "shift", "alt", "super", "none"],
+                        help="modifier held with right-click to leave sugar (default: ctrl)")
     parser.add_argument("--seed", type=int, default=None, help="seed the simulation for reproducibility")
     parser.add_argument("--no-seed", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
@@ -110,10 +113,15 @@ def main(argv: list[str] | None = None) -> int:
 
     from .app import DesktopFly
     app = DesktopFly(monitor_index=args.monitor, show_brain=not args.no_brain,
-                     seed=args.seed)
+                     seed=args.seed, sugar_modifier=args.sugar_modifier)
     print(f"desktopfly: {app.data_info}", flush=True)
     print(f"living on monitor [{app.monitor_index}] {app.monitor['name']}; "
           f"quit from the 🪰 tray menu or with Ctrl-C", flush=True)
+    mod = args.sugar_modifier
+    combo = "right-click" if mod == "none" else f"{mod}+right-click"
+    if getattr(app.sugar_grab, "error", None):
+        print(f"warning: {app.sugar_grab.error}", flush=True)
+    print(f"sugar: {combo} to leave a drop (or the tray menu)", flush=True)
     if not app.tray.available:
         print("note: no AppIndicator tray available — quit with Ctrl-C", flush=True)
     try:

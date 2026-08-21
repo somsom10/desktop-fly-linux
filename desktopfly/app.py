@@ -26,13 +26,15 @@ from .platform.environment import (
 )
 from .platform.gtkcompat import GLib, Gtk
 from .platform.overlay import Overlay, monitors, pointer_position
-from .platform.taps import TapSense
+from .platform.taps import ButtonGrab, TapSense
 from .platform.tray import Tray
 from .render.brain_renderer import BrainRenderer
 from .render.fly_renderer import SIZE as TILE, FlyRenderer
+from .render.sugar_renderer import TILE as SUGAR_TILE, SugarRenderer
 from .simcore.data import load_brain_data
 from .simcore.lif import LIFSim, SpikeBus
 from .simcore.signals import BrainSignals, SignalBuilder, clampf
+from .world.sugar import SugarField, sense as sugar_sense
 
 FRAME_MS = 16
 AMBIENT_EVERY = 2  # ambient senses at ~30 Hz
@@ -58,9 +60,46 @@ class FlyView:
         self.overlay.destroy()
 
 
+class SugarView:
+    """One sugar drop and its (static) overlay window.
+
+    Drops do not move, so the window is positioned once and only repainted when
+    the drop visibly shrinks — a fly eating for three seconds should not cost
+    180 redraws of a bead that barely changes.
+    """
+
+    def __init__(self, drop, monitor: dict, on_click=None):
+        self.drop = drop
+        self._on_click = on_click
+        self.overlay = Overlay(SUGAR_TILE, SUGAR_TILE,
+                               on_click=self._clicked if on_click else None)
+        self.renderer = SugarRenderer(SUGAR_TILE)
+        self._last_radius = -1.0
+        cx = monitor["x"] + monitor["width"] / 2 + drop.x
+        cy = monitor["y"] + monitor["height"] / 2 - drop.y
+        self.overlay.move(cx - SUGAR_TILE / 2, cy - SUGAR_TILE / 2)
+        self.draw()
+
+    def _clicked(self, _event) -> None:
+        if self._on_click:
+            self._on_click(self.drop)
+
+    def draw(self) -> None:
+        r = self.drop.draw_radius
+        if abs(r - self._last_radius) < 0.35:
+            return
+        self._last_radius = r
+        self.overlay.blit(self.renderer.render(self.drop))
+        # only the bead is clickable, not its whole tile
+        self.overlay.set_input_circle(r + 1.5)
+
+    def destroy(self) -> None:
+        self.overlay.destroy()
+
+
 class DesktopFly:
     def __init__(self, monitor_index: int | None = None, show_brain: bool = True,
-                 seed: int | None = None):
+                 seed: int | None = None, sugar_modifier: str = "ctrl"):
         self.monitors = monitors()
         if not self.monitors:
             raise RuntimeError("no monitors reported by GDK")
@@ -89,6 +128,11 @@ class DesktopFly:
         self.idle_sense = IdleSense()
         self.typing_sense = TypingSense(self.idle_sense)
         self.tap_sense = TapSense()
+        self.sugar_grab = ButtonGrab(3, sugar_modifier)
+
+        self.sugar = SugarField()
+        self.sugar_views: list[SugarView] = []
+        self.sugar_modifier = sugar_modifier
         self.terrain = []
         self.typing_level = 0.0
         self.sleepy = False
@@ -103,6 +147,7 @@ class DesktopFly:
         self._last_t = None
         self._frame = 0
         self._last_window_poll = 0.0
+        self._smelled = None
 
         self.tray = self._build_tray()
 
@@ -140,6 +185,8 @@ class DesktopFly:
             "pause": ("Pause", lambda _i: self.toggle_pause()),
             "brain": ("Show/Hide Brain", lambda _i: self.brain.toggle()),
             "escape": ("Escape Test (loom)", lambda _i: self.escape_test()),
+            "sugar": ("Leave Sugar at Cursor", lambda _i: self.drop_sugar_at_cursor()),
+            "clearsugar": ("Clear Sugar", lambda _i: self.clear_sugar()),
             "display": ("Move to Next Display", lambda _i: self.next_display()),
             "sep1": (None, None),
             "add": ("Add Fly", lambda _i: self.add_fly()),
@@ -159,6 +206,40 @@ class DesktopFly:
 
     def escape_test(self) -> None:
         self._loom_override = 0.6
+
+    def drop_sugar(self, scene_x: float, scene_y: float) -> None:
+        """Leave a drop of sugar at a point in scene coordinates."""
+        drop = self.sugar.add(scene_x, scene_y)
+        self.sugar_views.append(SugarView(drop, self.monitor, on_click=self.remove_drop))
+        # keep the flies above the drops they stand on
+        for view in self.views:
+            view.overlay.raise_()
+
+    def drop_sugar_at_cursor(self) -> None:
+        px, py = pointer_position()
+        self.drop_sugar(*self._scene_from_screen(px, py))
+
+    def remove_drop(self, drop) -> None:
+        """Clicking a drop wipes it up."""
+        if drop in self.sugar.drops:
+            self.sugar.drops.remove(drop)
+        self._sync_sugar_views()
+
+    def clear_sugar(self) -> None:
+        self.sugar.clear()
+        self._sync_sugar_views()
+
+    def _sync_sugar_views(self) -> None:
+        """Retire the windows of drops that have been eaten or cleared."""
+        live = {id(d) for d in self.sugar.drops}
+        keep = []
+        for view in self.sugar_views:
+            if id(view.drop) in live:
+                view.draw()
+                keep.append(view)
+            else:
+                view.destroy()
+        self.sugar_views = keep
 
     def add_fly(self) -> None:
         self.views.append(FlyView(Fly(*self._random_start())))
@@ -180,6 +261,7 @@ class DesktopFly:
         self.monitor_index = (self.monitor_index + 1) % len(self.monitors)
         w, h = self.bounds
         self.terrain = []
+        self.clear_sugar()  # drops are placed in the old monitor's scene frame
         for view in self.views:
             view.fly.ledge = None
             view.fly.pos_x = clampf(view.fly.pos_x, -w / 2 + 40, w / 2 - 40)
@@ -282,10 +364,17 @@ class DesktopFly:
         px, py = pointer_position()
         mouse = self._scene_from_screen(px, py)
 
-        # left click anywhere = a tap on the fly's substrate -> sensory pathway
+        # left click anywhere = a tap on the fly's substrate -> sensory pathway;
+        # right click (with the configured modifier) leaves a drop of sugar
+        for click in self.sugar_grab.poll():
+            self.drop_sugar(*self._scene_from_screen(click.x, click.y))
         for click in self.tap_sense.poll():
             if click.button == 1 and self.views:
                 self._inject_tap(self._scene_from_screen(click.x, click.y), self.views[0].fly)
+            elif click.button == 3 and not self.sugar_grab.available \
+                    and click.has_modifier(self.sugar_modifier):
+                # no grab (e.g. --sugar-modifier none): fall back to raw events
+                self.drop_sugar(*self._scene_from_screen(click.x, click.y))
 
         signals = None
         if self.views:
@@ -300,6 +389,15 @@ class DesktopFly:
             # body -> brain: leg proprioception from the current gait
             self.sim.gait_drive = first.walking_intensity
             self.sim.gait_phase = first.gait_phase
+            # Sugar: modeled odour transduction -> current onto the real DNa
+            # steering pair and the real DNp09 walking command. Everything the
+            # fly then does about it comes out of the network.
+            smelled = sugar_sense(self.sugar, first.pos_x, first.pos_y,
+                                  first.heading, first.satiety)
+            self.sim.sugar_l = smelled.steer_left
+            self.sim.sugar_r = smelled.steer_right
+            self.sim.sugar_appetite = smelled.appetite
+            self._smelled = smelled
             # Circadian/sleep neuromodulation, compressed: the LIF neurons sit
             # just below threshold, so a raw multiplier silences them outright —
             # siesta must mean "less active", not comatose.
@@ -317,12 +415,23 @@ class DesktopFly:
             signals = self.signal_builder.make(self.sim, dt)
             signals.tempo = self.tempo
             signals.sleep = self.sleepy
+            signals.sugar_smell = self._smelled.smell
+            signals.sugar_contact = self._smelled.contact is not None
+            signals.satiety = first.satiety
 
         mon = self.monitor
         for i, view in enumerate(self.views):
             view.fly.terrain = self.terrain
             view.fly.update(dt, self.bounds, mouse, signals if i == 0 else None)
             view.draw(mon)
+
+        # feeding actually consumes the drop it is standing on
+        if self.views and self.views[0].fly.state is State.FEEDING:
+            drop = self._smelled.contact if self._smelled else None
+            if drop is not None:
+                self.sugar.consume(drop, dt)
+        self.sugar.tick(dt)
+        self._sync_sugar_views()
 
         if self._frame % 2 == 0:
             self.brain.draw(dt * 2)

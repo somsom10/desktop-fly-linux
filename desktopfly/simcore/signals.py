@@ -28,6 +28,12 @@ class BrainSignals:
     arousal: float = 0.0  # whole-population activity, ~0..1
     tempo: float = 1.0  # thermal scaling of locomotion
     sleep: bool = False  # circadian + idle -> sleep-like state
+    # Sugar (an addition, not upstream). These are *modeled* signals set outside
+    # the network, exactly as tempo and sleep already are -- the circuit has no
+    # gustatory pathway to derive them from. See world/sugar.py.
+    sugar_smell: float = 0.0  # odour concentration at the fly, 0..1
+    sugar_contact: bool = False  # standing on a drop (contact chemoreception)
+    satiety: float = 0.0  # 0 hungry .. 1 full; suppresses interest in food
 
 
 class SignalBuilder:

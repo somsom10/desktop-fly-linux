@@ -41,6 +41,10 @@ class LIFSim:
     GAP_JUNCTION_BOOST = np.float32(6.0)
     INH_DELAY_MS = 4
     V_FLOOR = np.float32(-2.0)
+    # Sugar gains, chosen to bias an already-active circuit rather than to
+    # override it: escape must still win over a meal.
+    SUGAR_STEER_GAIN = np.float32(0.11)
+    SUGAR_WALK_GAIN = np.float32(0.075)
 
     def __init__(self, circuit: Circuit, spike_bus=None, seed: int | None = None):
         self.rng = np.random.default_rng(seed)
@@ -126,6 +130,14 @@ class LIFSim:
         self.air_puff = 0.0
         self.activity_scale = 1.0
         self.sensory_gate = 1.0
+        # Appetitive drive from the sugar field (an addition, not upstream).
+        # Modeled transduction -> injected onto the REAL steering and walking
+        # command neurons; see world/sugar.py for what is real and what is not.
+        # With no sugar present these stay 0 and the sim is bit-identical to
+        # the faithful port.
+        self.sugar_l = 0.0
+        self.sugar_r = 0.0
+        self.sugar_appetite = 0.0
 
         # --- outputs ---
         self.rate_loom = 0.0
@@ -206,6 +218,16 @@ class LIFSim:
                 )
             if self.air_puff > 0.001:
                 v[self.sens] += np.float32(self.air_puff * 0.12 * self.sensory_gate)
+            # odour bearing -> asymmetric drive onto DNa01/DNa02: more current on
+            # the side the smell is on, which is the side that turns toward it
+            if self.sugar_l > 0.001:
+                v[self.dna_l] += np.float32(self.sugar_l * self.SUGAR_STEER_GAIN * self.sensory_gate)
+            if self.sugar_r > 0.001:
+                v[self.dna_r] += np.float32(self.sugar_r * self.SUGAR_STEER_GAIN * self.sensory_gate)
+            # a smelled meal is a reason to walk: drive onto DNp09
+            if self.sugar_appetite > 0.001:
+                v[self.fwd] += np.float32(
+                    self.sugar_appetite * self.SUGAR_WALK_GAIN * self.sensory_gate)
             for idx, strength, until in self._active_stims:
                 if self.sim_ms < until:
                     v[idx] += np.float32(strength)

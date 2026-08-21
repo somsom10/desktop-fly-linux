@@ -10,7 +10,7 @@ too, because `simcore/` and `body/` are direct translations of that code.
 ```sh
 ./run.sh                    # the app
 ./run.sh --simtest          # circuit invariants (MUST pass after sim changes)
-./run.sh --behaviortest     # 17 sim->body checks (MUST pass after behaviour changes)
+./run.sh --behaviortest     # 21 sim->body checks (MUST pass after behaviour changes)
 ./run.sh --list-monitors
 ```
 
@@ -59,10 +59,38 @@ Gtk/Gdk/GLib from `desktopfly.platform.gtkcompat`, never from `gi.repository`.
 - **Renderer is orthographic and analytic** for the fly, perspective for the
   brain. Don't add a mesh rasteriser without a reason — see
   `docs/PORT_PLAN.md#rendering`.
-- **`TapSense` parses the XI2 raw event bytes by hand** (`_raw_button`):
-  python-xlib does not decode raw events, and the obvious
-  `getattr(event.data, "detail", 1)` silently returns 1 for every click.
-  Parsers here return 0 on failure rather than a plausible default.
+
+## Sugar (an addition, not upstream)
+
+`world/sugar.py` + `render/sugar_renderer.py` + the `FEEDING` state. Ctrl+
+right-click drops sugar; the odour bearing is injected onto the **real**
+DNa01/DNa02 and DNp09 neurons (`sim.sugar_l/r/appetite`), and approach comes out
+of the network. Feeding on contact is modeled outright — verified that the
+circuit has no gustatory pathway (its 16 sensory partners are all
+mechanosensory; FlyWire's 334 gustatory neurons make zero synapses onto the
+668). Don't describe sugar as connectome-driven without that qualification.
+
+Drops are *interactive* overlays: `Overlay(on_click=...)` plus
+`set_input_circle()` shapes the XShape input region down to the bead, so a drop
+is clickable (click = wipe it up) while everything around it stays
+click-through. The fly's own overlay is never interactive.
+
+Sugar placement uses a **passive button grab** (`platform/taps.ButtonGrab`),
+not raw XI2 events. Raw events carry no modifier state, so pairing one with Ctrl
+means querying the keyboard afterwards — a race that loses whenever the key is
+released quickly, which is exactly how the first version broke. A grab matches
+the modifier in the server and consumes the click. Remember the CapsLock/NumLock
+combos when registering a grab, or it stops matching with either lock on.
+
+Also note `TapSense` must parse the XI2 raw event **bytes** by hand
+(`_raw_button`): python-xlib does not decode raw events, and the original
+`getattr(event.data, "detail", 1)` silently returned 1 for every click. Parsers
+here return 0 on failure rather than a plausible default, for that reason.
+
+When tuning it, measure the transfer function first — the DNa response has a
+threshold and drive below ~0.1 does nothing at all, which is why `PLUME_SIGMA`
+is 450 (screen-wide) and `sense()` shapes the bearing non-linearly. All sugar
+inputs are zero-guarded, so with no drops the sim is bit-identical to the port.
 
 ## Verification tooling
 

@@ -24,11 +24,13 @@ gap-junction boost and the operating point all survived the translation.
 
 Full current output is reproduced at the bottom of this file.
 
-## `--behaviortest` — 17 end-to-end checks
+## `--behaviortest` — 21 end-to-end checks
+
+**17 ported from upstream, plus 4 for the sugar feature** (see "Sugar" below).
 
 Seven scenarios stimulate a real neuron population and assert the body reacts;
 ten body-level checks exercise terrain, sleep, thermal tempo, flight, landing
-and the circadian curve. **All 17 pass.**
+and the circadian curve. **All 21 pass.**
 
 ## Deliberate deviation: the suites are seeded
 
@@ -89,3 +91,35 @@ click probes: GF cluster -> spike yes, DNg11 cluster -> groom rate 200 Hz
 PASS: GF silent at rest, fires on loom; locomotor drive fluctuates; stim works; siesta alive
 ```
 
+
+## Sugar: an addition, and how it is kept honest
+
+Sugar is not in upstream. Four checks guard it:
+
+| check | what it protects |
+|---|---|
+| `sugar contact -> feeding, proboscis out, satiety rises` | the feeding state machine |
+| `sated fly ignores sugar` | satiety actually suppresses interest |
+| `escape outranks feeding` | a GF spike still wins over a meal |
+| `odour bearing -> real DNa steering response` | **the drive really moves the network** |
+
+The last one is the important one. Approach is produced by injecting current
+onto the real DNa01/DNa02 and DNp09 neurons and letting the circuit respond, so
+the check asserts that a smell on the left produces `turn_bias > 0` (CCW, toward
+it) out of the real rates — measured `drive L/R 0.27/0.00 -> turn_bias +0.71`.
+If the network ever stopped responding, the feature would silently become
+scripted animation, and this check is what catches that.
+
+Chemotaxis was also measured end-to-end, 6 seeds, 45 s, fly starting 795 px away:
+
+```
+WITH sugar     closest approach: 266   5  12   8 817   0 px | reached 4/6 | fed 12.3 s
+WITHOUT sugar  closest approach: 124 875 373 739 838 406 px | reached 0/6 | fed  0.0 s
+```
+
+4/6 rather than 6/6 is intended: the fly still darts, grooms, and takes off on
+its own, so it does not behave like a homing missile.
+
+With no sugar on screen every sugar input is zero and guarded by the same
+`> 0.001` tests as upstream's other sensory inputs, so the simulation is
+bit-identical to the faithful port.

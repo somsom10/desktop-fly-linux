@@ -65,8 +65,54 @@ A 🪰 appears in the tray; quit from there, or Ctrl-C the terminal.
 | Show/Hide Brain | toggle the live brain window |
 | Escape Test (loom) | inject a looming stimulus, watch the GF fire |
 | Move to Next Display | hop the fly across monitors (multi-monitor only) |
+| Leave Sugar at Cursor | drop sugar where the pointer is |
+| Clear Sugar | remove every drop (or click a drop to wipe just that one) |
 | Add / Remove Fly | extra flies (only fly #1 carries the brain) |
 | Scare Flies | startle everyone |
+
+## Sugar
+
+**Ctrl + right-click anywhere** leaves a drop of sugar on the screen (or use the
+tray menu). **Click a drop to wipe it up.** Only the bead itself is clickable —
+a click a few pixels away passes straight through to whatever is underneath, so
+drops never get in your way. The fly smells it, walks over, extends its proboscis and feeds until
+it is full; then it grooms, as flies do after a meal, and ignores sugar for a few
+minutes while it is sated. Escape always outranks a meal — startle it mid-feed
+and it takes off.
+
+```sh
+./run.sh --sugar-modifier super   # or shift / alt / none
+```
+
+Ctrl+right-click is taken by a passive X **button grab**, so it does not also
+reach the app underneath — no stray context menu. Plain right-click is
+completely unaffected; only that one combination is grabbed.
+
+Two caveats. `--sugar-modifier none` cannot use a grab (it would swallow every
+right-click on the system), so it falls back to watching raw input, where the
+modifier check is unreliable. And like every other window-related sense here,
+the grab only covers **X11/XWayland** surfaces — Ctrl+right-click over a native
+Wayland window (the GNOME desktop background, for instance) will not register.
+The tray's *Leave Sugar at Cursor* always works.
+
+### What's real about it
+
+Approach is real; taste is not. Specifically:
+
+- **Real**: the odour bearing is injected as current onto the actual
+  **DNa01/DNa02** steering neurons and the actual **DNp09** walking command
+  neuron. The turn and the gait that follow are produced by the real network
+  through real synapses — the same way upstream's cursor→looming pathway works.
+- **Modeled**: the odour field, its falloff, and the decision to start feeding
+  on contact.
+
+That split is forced, and it was checked rather than assumed. The 668-neuron
+circuit is an escape/steering/locomotion circuit; its 16 `sensory` partners are
+**all mechanosensory** (the wind/Johnston's-Organ pathway that feeds the giant
+fiber). FlyWire v783 *does* contain **334 gustatory neurons**, but scanning all
+3.87 M connection rows shows they make **zero synapses onto any of the 668
+circuit neurons** — they project into SEZ feeding circuitry instead. A genuine
+sugar pathway would mean extracting a second circuit, not extending this one.
 
 **The brain window is interactive**: hovering pauses the rotation; clicking a
 region stimulates the ~60 nearest circuit neurons for 400 ms. The fly's reaction

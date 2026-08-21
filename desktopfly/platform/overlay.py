@@ -80,9 +80,19 @@ def surface_to_pixbuf(surf: cairo.ImageSurface, w: int, h: int) -> GdkPixbuf.Pix
 class Overlay:
     """One transparent, click-through window that follows a point on screen."""
 
-    def __init__(self, width: int, height: int, name: str = "desktopfly"):
+    def __init__(self, width: int, height: int, name: str = "desktopfly",
+                 on_click=None):
+        """``on_click`` makes the overlay accept button presses.
+
+        Without it the window is fully click-through. With it, the clickable
+        area still defaults to nothing until :meth:`set_input_circle` carves one
+        out, so an interactive overlay only ever blocks the pixels it actually
+        draws on.
+        """
         self.width = width
         self.height = height
+        self._on_click = on_click
+        self._input_radius = None
         self.win = Gtk.Window(type=Gtk.WindowType.POPUP)
         self.win.set_name(name)
         screen = self.win.get_screen()
@@ -104,6 +114,9 @@ class Overlay:
         self.win.resize(width, height)
         self.image = Gtk.Image()
         self.win.add(self.image)
+        if on_click is not None:
+            self.win.add_events(Gdk.EventMask.BUTTON_PRESS_MASK)
+            self.win.connect("button-press-event", self._handle_click)
         self.win.connect("realize", self._on_realize)
         # GDK rewrites the input shape while mapping the window, so a shape set
         # during "realize" is silently discarded. It has to be (re)applied once
@@ -122,8 +135,45 @@ class Overlay:
         gw.set_override_redirect(True)
 
     def _on_map(self, *_):
-        self._make_click_through(self.win.get_window().get_xid())
+        if self._on_click is None:
+            self._make_click_through(self.win.get_window().get_xid())
+        else:
+            self._apply_input_circle()
         return False
+
+    def _handle_click(self, _widget, event):
+        if self._on_click is not None:
+            self._on_click(event)
+        return True
+
+    def set_input_circle(self, radius: float) -> None:
+        """Restrict the clickable area to a disc of ``radius`` at the centre."""
+        radius = max(0.0, float(radius))
+        if self._input_radius is not None and abs(radius - self._input_radius) < 0.5:
+            return
+        self._input_radius = radius
+        if self.win.get_mapped():
+            self._apply_input_circle()
+
+    def _apply_input_circle(self) -> None:
+        """Approximate a disc with one rectangle per scanline."""
+        xid = self.gdk_window.get_xid()
+        r = self._input_radius
+        rects = []
+        if r:
+            cx = cy = self.width / 2.0
+            for dy in range(int(-r), int(r) + 1):
+                half = math.sqrt(max(0.0, r * r - dy * dy))
+                if half < 0.5:
+                    continue
+                rects.append({
+                    "x": int(cx - half), "y": int(cy + dy),
+                    "width": max(1, int(2 * half)), "height": 1,
+                })
+        d = _xdisp()
+        win = d.create_resource_object("window", xid)
+        win.shape_rectangles(_shape.SO.Set, _shape.SK.Input, 0, 0, 0, rects)
+        d.sync()
 
     @staticmethod
     def _make_click_through(xid: int) -> None:
@@ -147,7 +197,7 @@ class Overlay:
     def raise_(self) -> None:
         """Restack this overlay above the other override-redirect overlays.
 
-        Override-redirect windows stack in map order, so an overlay created
+        Override-redirect windows stack in map order, so a sugar drop created
         after the fly would otherwise cover the fly standing on it.
         """
         self.gdk_window.raise_()

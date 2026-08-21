@@ -80,6 +80,7 @@ ABDOMEN = ((0.0, -6.5, 5.6), 5.0, (0.9, 1.5, 0.75))
 HEAD = ((0.0, 9.0, 6.0), 3.0, (1.0, 0.85, 0.9))
 EYE_R = ((2.1, 9.7, 6.4), 2.0, (0.8, 1.0, 1.15))
 EYE_L = ((-2.1, 9.7, 6.4), 2.0, (0.8, 1.0, 1.15))
+PROBOSCIS = ((0.0, 10.4, 4.6), 1.2, (0.5, 0.5, 1.0))
 ANTENNA_OFFSET = 0.9
 
 # Colours (linear RGB, matching upstream's calibrated NSColors).
@@ -89,6 +90,7 @@ LEG_COLOR = (0.33, 0.24, 0.14)
 TARSUS_COLOR = (0.2475, 0.18, 0.105)  # legColor blended 25% toward black
 EYE_RED = (0.62, 0.10, 0.07)
 ANTENNA_COLOR = (0.30, 0.22, 0.13)
+PROBOSCIS_COLOR = (0.35, 0.26, 0.16)
 ABDOMEN_BASE = (0.72, 0.55, 0.32)
 ABDOMEN_STRIPE = (0.22, 0.15, 0.09)
 WING_COLOR = (0.92, 0.92, 0.92)

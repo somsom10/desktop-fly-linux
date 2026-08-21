@@ -6,7 +6,7 @@ the whole fly is a couple of dozen cairo paths — no mesh, no depth buffer, no
 GPU context on a 32-bit ARGB visual.
 
 Parts are painted in a fixed back-to-front order that matches their local Z:
-shadow, legs, abdomen, thorax, head, eyes, antennae, wings.  With a
+shadow, legs, proboscis, abdomen, thorax, head, eyes, antennae, wings.  With a
 fixed top-down view that order is stable, so no per-frame sorting is needed.
 """
 
@@ -120,6 +120,8 @@ class FlyRenderer:
         self._draw_shadow(cr, fly, mat)
         self._draw_legs(cr, fly, mat)
 
+        self._draw_proboscis(cr, fly, mat, screen)
+
         self._draw_abdomen(cr, fly, mat, screen)
 
         tc, tr, ts = M.THORAX
@@ -158,6 +160,28 @@ class FlyRenderer:
         cr.arc(0, 0, rad * 1.5, 0, 2 * math.pi)
         cr.fill()
         cr.restore()
+
+    def _draw_proboscis(self, cr, fly, mat, screen):
+        """The proboscis, extended into a sugar drop while feeding.
+
+        Drawn before the head, so retracted it is hidden under the head's
+        silhouette and only the part that reaches past the head shows — which is
+        what extension actually looks like from above.
+        """
+        ext = getattr(fly, "proboscis_ext", 0.0)
+        pc, pr, ps = M.PROBOSCIS
+        centre = (pc[0], pc[1] + 3.4 * ext, pc[2] - 1.8 * ext)
+        radii = np.array(ps) * pr
+        radii[1] *= 1.0 + 1.7 * ext  # it lengthens as it unfolds
+        colour = M.PROBOSCIS_COLOR
+        if ext > 0.01:  # fleshier when everted
+            colour = tuple(c + (t - c) * 0.45 * ext
+                           for c, t in zip(colour, (0.55, 0.36, 0.30)))
+        _ellipsoid(cr, screen(centre), mat, radii, colour)
+        if ext > 0.25:  # the labellum dabbing at the drop
+            tip = (pc[0], pc[1] + 5.6 * ext, pc[2] - 2.6 * ext)
+            _ellipsoid(cr, screen(tip), mat, np.array([0.85, 0.7, 0.6]) * (0.6 + 0.5 * ext),
+                       (0.60, 0.40, 0.33))
 
     def _draw_legs(self, cr, fly, mat):
         for leg in fly.model.legs:

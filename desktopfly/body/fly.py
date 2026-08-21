@@ -19,6 +19,11 @@ from ..simcore.signals import BrainSignals, clampf
 from .model import FLY_SCALE, FlyModel, build_fly_model
 
 EDGE_MARGIN = 50.0
+# Sugar/feeding (an addition, not upstream). A drop takes a few seconds to eat,
+# and the fly stays uninterested for a few minutes afterwards.
+FEED_SATIETY_RATE = 0.32  # satiety gained per second of feeding
+SATIETY_DECAY = 1.0 / 240.0  # hunger returns over ~4 minutes
+FEED_HUNGER_THRESHOLD = 0.75  # above this satiety, a drop is not worth stopping for
 SCARE_RADIUS = 110.0  # legacy behaviour (non-connectome flies) only
 NERVOUS_RADIUS = 240.0  # legacy behaviour only
 
@@ -29,6 +34,7 @@ class State(Enum):
     GROOMING = "grooming"
     FLYING = "flying"
     SLEEPING = "sleeping"
+    FEEDING = "feeding"
 
     def __str__(self) -> str:
         return self.value
@@ -91,6 +97,8 @@ class Fly:
         self.pitch = 0.0
         self.flap_phase = 0.0
         self.wing_raise = 0.0
+        self.satiety = 0.0  # 0 hungry .. 1 full
+        self.proboscis_ext = 0.0  # 0 retracted .. 1 extended into the drop
 
         # node-level state the renderer and the tests read
         self.scale = FLY_SCALE
@@ -291,6 +299,29 @@ class Fly:
             self.speed = rnd(110, 155)
             self.dart_timer = rnd(0.4, 0.9)
             self.dart_cooldown = 1.2
+        # Sugar: contact chemoreception -> feeding. Modeled outright — the
+        # circuit has no gustatory pathway to derive it from (verified: its 16
+        # sensory partners are all mechanosensory, and FlyWire's 334 gustatory
+        # neurons make zero synapses onto it). Approach, by contrast, is real:
+        # the odour bearing is injected onto DNa01/DNa02 and DNp09 in the sim.
+        if self.state is State.FEEDING:
+            self.satiety = min(1.0, self.satiety + FEED_SATIETY_RATE * dt)
+            self.speed = 0.0
+            done = (not s.sugar_contact) or self.satiety >= 0.98
+            if (done or s.nervous > 0.35) and self.state_age > 0.4:
+                self._set_state(State.GROOMING)  # flies groom after a meal
+            return
+        if (
+            s.sugar_contact
+            and self.satiety < FEED_HUNGER_THRESHOLD
+            and self.state_age > 0.4
+            and self.state in (State.WALKING, State.IDLE, State.GROOMING)
+        ):
+            self._set_state(State.FEEDING)
+            self.speed = 0.0
+            self.ledge = None
+            return
+
         # DNg11 (grooming command) hysteresis
         if self.state is not State.WALKING or self.dart_timer == 0:
             if (
@@ -422,6 +453,12 @@ class Fly:
                 if self.state is State.WALKING:
                     self._update_walk(dt, bounds)
 
+        if self.state is not State.FEEDING:
+            self.satiety = max(0.0, self.satiety - SATIETY_DECAY * dt)
+        # the proboscis extends into the drop while feeding, retracts otherwise
+        target = 1.0 if self.state is State.FEEDING else 0.0
+        self.proboscis_ext += (target - self.proboscis_ext) * min(1.0, 6 * dt)
+
         self._update_legs(dt)
         self._update_wings(dt)
         # slower, deeper breathing while asleep
@@ -462,6 +499,13 @@ class Fly:
                 else:
                     leg.angle += (0 - leg.angle) * min(1.0, 8 * dt)
                     leg.lift += (0 - leg.lift) * min(1.0, 8 * dt)
+        elif self.state is State.FEEDING:
+            for leg in self.model.legs:
+                if leg.is_front:  # tarsi dabbling at the drop
+                    leg.angle += (0.30 + 0.08 * math.sin(self.time * 7) - leg.angle) * min(1.0, 6 * dt)
+                    leg.lift += (0.18 - leg.lift) * min(1.0, 6 * dt)
+                else:
+                    leg.angle += (0 - leg.angle) * min(1.0, 8 * dt)
                     leg.lift += (0 - leg.lift) * min(1.0, 8 * dt)
         elif self.state is State.FLYING:
             for leg in self.model.legs:

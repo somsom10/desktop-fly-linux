@@ -13,6 +13,7 @@ import random
 import sys
 
 from ..body.fly import Fly, Ledge, State
+from ..world.sugar import SugarField, sense as sugar_sense
 from ..body.model import FLY_SCALE
 from ..platform.environment import circadian_activity
 from ..simcore.data import load_brain_data
@@ -314,6 +315,79 @@ def run(seed: int | None = DEFAULT_SEED) -> int:
         return ok, f"3h {night:.2f}, 9h {dawn:.2f}, 14h {siesta:.2f}, 18h {dusk:.2f}"
 
     body_check("circadian curve: siesta + night dips, dawn/dusk peaks", check_circadian)
+
+    # ---- sugar (an addition, not upstream) ----
+    def check_feeding():
+        fly = Fly(0.0, 0.0)
+        fly.state = State.IDLE
+        s = BrainSignals(sugar_contact=True)
+        fed = False
+        for _ in range(400):
+            fly.update(DT, BOUNDS, None, s)
+            fed = fed or fly.state is State.FEEDING
+            if fly.satiety > 0.9:
+                break
+        return (fed and fly.satiety > 0.9 and fly.proboscis_ext > 0.8,
+                f"fed={fed} satiety={fly.satiety:.2f} proboscis={fly.proboscis_ext:.2f}")
+
+    body_check("sugar contact -> feeding, proboscis out, satiety rises", check_feeding)
+
+    def check_sated():
+        """A full fly should walk past a drop rather than stop at it."""
+        fly = Fly(0.0, 0.0)
+        fly.state = State.WALKING
+        fly.speed = 30.0
+        fly.satiety = 1.0
+        s = BrainSignals(sugar_contact=True, walk_drive=0.6, satiety=1.0)
+        for _ in range(120):
+            fly.update(DT, BOUNDS, None, s)
+            if fly.state is State.FEEDING:
+                return False, "a sated fly stopped to feed"
+        return True, f"ignored the drop (satiety {fly.satiety:.2f})"
+
+    body_check("sated fly ignores sugar", check_sated)
+
+    def check_escape_beats_food():
+        """Escape must outrank a meal: the GF spike wins."""
+        fly = Fly(0.0, 0.0)
+        fly.state = State.IDLE
+        feeding = BrainSignals(sugar_contact=True)
+        for _ in range(90):
+            fly.update(DT, BOUNDS, None, feeding)
+        if fly.state is not State.FEEDING:
+            return False, f"never started feeding ({fly.state})"
+        alarm = BrainSignals(sugar_contact=True, escape=True)
+        fly.update(DT, BOUNDS, None, alarm)
+        return fly.state is State.FLYING, f"GF spike while feeding -> {fly.state}"
+
+    body_check("escape outranks feeding", check_escape_beats_food)
+
+    def check_odour_steering():
+        """The odour bearing must actually move the real DNa rates.
+
+        This is the check that keeps the feature honest: approach is produced by
+        injecting current onto DNa01/DNa02 and DNp09 and letting the network
+        respond, so if the network stops responding the feature is a lie.
+        """
+        sim = LIFSim(circuit, seed=seed)
+        builder = SignalBuilder()
+        sim.step(600)
+        sim.consume_gf()
+        field = SugarField()
+        field.add(0.0, 600.0)  # straight to the fly's left when heading = 0
+        smelled = sugar_sense(field, 0.0, 0.0, 0.0, 0.0)
+        sim.sugar_l = smelled.steer_left
+        sim.sugar_r = smelled.steer_right
+        sim.sugar_appetite = smelled.appetite
+        bias = 0.0
+        for _ in range(120):
+            sim.step(16)
+            bias = builder.make(sim, DT).turn_bias
+        return (smelled.steer_left > smelled.steer_right and bias > 0.05,
+                f"drive L/R {smelled.steer_left:.2f}/{smelled.steer_right:.2f} "
+                f"-> turn_bias {bias:+.2f} (CCW = toward the smell)")
+
+    body_check("odour bearing -> real DNa steering response", check_odour_steering)
 
     print("ALL BEHAVIOR TESTS PASS" if failures == 0 else f"{failures} FAILURES")
     return 0 if failures == 0 else 1
