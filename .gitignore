@@ -1,5 +1,7 @@
 __pycache__/
 *.pyc
+build/
+*.egg-info/
 scratch/
 *.png
 !upstream/assets/*.png

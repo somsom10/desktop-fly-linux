@@ -1,5 +1,7 @@
 # desktopfly (Linux) 🪰
 
+[![Tests](https://github.com/somsom10/desktop-fly-linux/actions/workflows/tests.yml/badge.svg)](https://github.com/somsom10/desktop-fly-linux/actions/workflows/tests.yml)
+
 A 3D fruit fly that lives on your Linux desktop — walking, grooming, sleeping and
 fleeing your cursor because a **live spiking simulation of the real FlyWire
 connectome** says so, not because an animation was triggered.
@@ -44,7 +46,7 @@ with Ubuntu:
 
 ```sh
 sudo apt install python3-numpy python3-cairo python3-xlib python3-gi \
-                 gir1.2-ayatanaappindicator3-0.1
+                 python3-pil gir1.2-ayatanaappindicator3-0.1
 ```
 
 No `python3-gi-cairo` needed — the renderer deliberately avoids the GI/cairo
@@ -53,6 +55,8 @@ bridge (see [docs/PORT_PLAN.md](docs/PORT_PLAN.md#rendering)).
 ## Run
 
 ```sh
+git clone https://github.com/somsom10/desktop-fly-linux.git
+cd desktop-fly-linux
 ./run.sh                    # fly + brain window, on the primary monitor
 ./run.sh --monitor 1        # pick a monitor (--list-monitors to see them)
 ./run.sh --no-brain         # fly only
@@ -60,10 +64,10 @@ bridge (see [docs/PORT_PLAN.md](docs/PORT_PLAN.md#rendering)).
 
 A 🪰 appears in the tray; quit from there, or Ctrl-C the terminal.
 
-> **Running from a VS Code / Claude Code terminal?** Use `./run.sh`, not
-> `python3 -m desktopfly`. The VS Code snap exports `GTK_PATH` and friends
-> pointing at its own bundled GTK, which makes system PyGObject fail on import.
-> `run.sh` goes through `tools/desnap.sh`, which scrubs those.
+> **Running from a snap-packaged editor terminal?** Use `./run.sh`, not
+> `python3 -m desktopfly`. Some snaps export `GTK_PATH` and related variables
+> pointing at their bundled GTK, which can make system PyGObject fail on import.
+> `run.sh` goes through `tools/desnap.sh`, which removes those conflicts.
 
 ## Controls (tray 🪰)
 
@@ -131,14 +135,16 @@ escapes, click DNg11 and it grooms.
 
 ```sh
 ./run.sh --simtest          # circuit invariants: GF silent at rest, 4 ms loom latency, ...
-./run.sh --behaviortest     # 17 end-to-end checks: stimulate neurons -> body reacts
+./run.sh --behaviortest     # 21 end-to-end checks: 17 upstream + 4 sugar
 ./run.sh --snapshot f.png   # offscreen fly render
 ./run.sh --brainshot b.png  # offscreen brain render
 ```
 
-Both suites are ported check-for-check from upstream and both pass. They are
-seeded by default so a red result means a real regression — upstream runs them
-unseeded, where three checks are genuinely flaky. See [docs/PARITY.md](docs/PARITY.md).
+The simulation suite and all 17 upstream behavior checks are ported
+check-for-check and pass. Four additional checks cover sugar, for 21 behavior
+checks in total. The suites are seeded by default so failures are reproducible;
+upstream runs them unseeded, where three checks are genuinely flaky. See
+[docs/PARITY.md](docs/PARITY.md).
 
 ## Desktop ecology on Linux
 
@@ -155,6 +161,14 @@ upstream. **Native Wayland windows are invisible** to the terrain and tap senses
 — no unprivileged Wayland client can enumerate other windows or observe their
 input. X11/XWayland apps work fully. Details and options in
 [docs/PORT_PLAN.md](docs/PORT_PLAN.md#known-limitations).
+
+## Development
+
+This Linux port was created with Claude Code, which produced much of the
+implementation and documentation under the repository owner's direction. The
+upstream source is preserved for comparison, and the verification process is
+documented in [docs/PARITY.md](docs/PARITY.md). See
+[CONTRIBUTING.md](CONTRIBUTING.md) for development notes.
 
 ## Licence
 

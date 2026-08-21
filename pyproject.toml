@@ -1,19 +1,34 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "desktopfly"
 version = "0.1.0"
 description = "A 3D fruit fly on your Linux desktop, driven by a live spiking simulation of the real FlyWire connectome"
+readme = "README.md"
 requires-python = ">=3.10"
-license = "MIT"
-license-files = ["LICENSE"]
+license = { text = "MIT for code; bundled FlyWire-derived data is CC BY-NC 4.0" }
 keywords = ["flywire", "connectome", "drosophila", "desktop-pet", "x11", "spiking-neural-network"]
-dependencies = ["numpy>=1.24", "pycairo>=1.20", "PyGObject>=3.42", "python-xlib>=0.33"]
+dependencies = ["numpy>=1.24", "pycairo>=1.20", "PyGObject>=3.42", "python-xlib>=0.33", "Pillow>=9.0"]
 
 [project.urls]
 Homepage = "https://github.com/somsom10/desktop-fly-linux"
 Upstream = "https://github.com/DenisSergeevitch/desktop-fly"
+"Data license" = "https://github.com/somsom10/desktop-fly-linux/blob/main/DATA_LICENSE.md"
 
 [project.scripts]
 desktopfly = "desktopfly.cli:main"
 
+[tool.setuptools]
+license-files = ["LICENSE", "DATA_LICENSE.md"]
+
 [tool.setuptools.packages.find]
 include = ["desktopfly*"]
+
+[tool.setuptools.data-files]
+"share/desktopfly/data" = [
+    "upstream/data/brain_points.json",
+    "upstream/data/circuit.json",
+    "upstream/data/DATA_LICENSE.md",
+]

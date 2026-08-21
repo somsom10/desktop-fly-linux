@@ -78,7 +78,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--simtest", action="store_true",
                         help="circuit invariants (GF silence, loom latency, siesta)")
     parser.add_argument("--behaviortest", action="store_true",
-                        help="17 end-to-end sim->body checks")
+                        help="21 end-to-end checks (17 upstream + 4 sugar)")
     parser.add_argument("--snapshot", metavar="PNG", help="offscreen fly render")
     parser.add_argument("--brainshot", metavar="PNG", help="offscreen brain render")
     parser.add_argument("--monitor", type=int, default=None,

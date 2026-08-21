@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from dataclasses import dataclass
 
 import numpy as np
@@ -61,6 +62,8 @@ def find_data_dir(explicit: str | None = None) -> str:
         os.path.join(root, "data"),
         os.path.join(root, "upstream", "data"),
         os.path.join(here, "data"),
+        os.path.join(root, "share", "desktopfly", "data"),
+        os.path.join(sys.prefix, "share", "desktopfly", "data"),
         os.path.join(os.getcwd(), "data"),
         os.path.join(os.getcwd(), "upstream", "data"),
     ]
