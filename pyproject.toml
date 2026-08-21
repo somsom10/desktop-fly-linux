@@ -1,0 +1,19 @@
+[project]
+name = "desktopfly"
+version = "0.1.0"
+description = "A 3D fruit fly on your Linux desktop, driven by a live spiking simulation of the real FlyWire connectome"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+keywords = ["flywire", "connectome", "drosophila", "desktop-pet", "x11", "spiking-neural-network"]
+dependencies = ["numpy>=1.24", "pycairo>=1.20", "PyGObject>=3.42", "python-xlib>=0.33"]
+
+[project.urls]
+Homepage = "https://github.com/somsom10/desktop-fly-linux"
+Upstream = "https://github.com/DenisSergeevitch/desktop-fly"
+
+[project.scripts]
+desktopfly = "desktopfly.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["desktopfly*"]
