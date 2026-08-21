@@ -1,0 +1,32 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  headless:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            python3-numpy \
+            python3-cairo \
+            python3-xlib \
+            python3-gi \
+            python3-pil \
+            python3-pip \
+            python3-setuptools \
+            python3-wheel
+      - name: Run simulation invariants
+        run: PATH=/usr/bin:/bin ./run.sh --simtest
+      - name: Run behavior checks
+        run: PATH=/usr/bin:/bin ./run.sh --behaviortest
+      - name: Build the Python wheel
+        run: /usr/bin/python3 -m pip wheel . --no-deps --no-build-isolation --wheel-dir /tmp/wheels

@@ -91,7 +91,7 @@ axis-aligned.
 
 ### Why no GI/cairo bridge
 
-`python3-gi-cairo` is not installed and installing it needs a password. That
+`python3-gi-cairo` is deliberately not required. That
 package supplies the foreign-struct converter for `cairo.Context` and
 `cairo.Region`, without which GTK's `draw` signal and
 `input_shape_combine_region` are both unusable. Rather than depend on it, the

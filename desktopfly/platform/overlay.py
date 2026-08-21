@@ -9,10 +9,10 @@ Two things forced the design away from a straight translation:
   wasteful when the subject is a 40 px fly.  Instead each fly gets its own
   small window that is *moved* to follow it.  Rendering cost becomes
   independent of screen size.
-* **No GI/cairo bridge.** ``python3-gi-cairo`` is not installed and installing
-  it needs a password, so the ``draw`` signal (which hands Python a
-  ``cairo.Context``) is unusable, as is ``input_shape_combine_region`` (which
-  wants a ``cairo.Region``).  We therefore draw into a plain pycairo
+* **No GI/cairo bridge.** The renderer deliberately avoids
+  ``python3-gi-cairo``, so the ``draw`` signal (which hands Python a
+  ``cairo.Context``) is not used, nor is ``input_shape_combine_region`` (which
+  wants a ``cairo.Region``). We instead draw into a plain pycairo
   ``ImageSurface``, blit it through ``GdkPixbuf``, and set the input shape with
   raw XShape calls via python-xlib.
 """
