@@ -13,7 +13,11 @@ import os
 
 # The overlay relies on X11 specifics (override-redirect, XShape input regions)
 # that have no Wayland equivalent for an unprivileged client, so pin XWayland.
-os.environ.setdefault("GDK_BACKEND", "x11")
+# This is an assignment, not setdefault: several Wayland sessions already export
+# GDK_BACKEND (Hyprland/Omarchy ships "wayland,x11,*"), and setdefault would
+# leave that in place -- GTK then picks the Wayland backend and the overlay
+# dies in _on_map with "'GdkWaylandWindow' object has no attribute 'get_xid'".
+os.environ["GDK_BACKEND"] = "x11"
 
 import gi
 
